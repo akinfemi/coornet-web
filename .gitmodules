@@ -1,0 +1,3 @@
+[submodule "CooRTweet"]
+	path = CooRTweet
+	url = git@github.com:akinfemi/CooRTweet.git
