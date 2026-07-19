@@ -21,6 +21,7 @@ export default function JobPage() {
   const navigate = useNavigate()
   const [tab, setTab] = useState<Tab>('network')
   const [rerunBusy, setRerunBusy] = useState(false)
+  const [rerunError, setRerunError] = useState<string | null>(null)
 
   const job = useQuery({
     queryKey: ['job', jobId],
@@ -49,6 +50,7 @@ export default function JobPage() {
   const onRerun = async () => {
     if (!job.data?.dataset_id) return
     setRerunBusy(true)
+    setRerunError(null)
     try {
       const { job_id } = await createJob(
         job.data.dataset_id,
@@ -58,6 +60,8 @@ export default function JobPage() {
       setDraft(null)
       setTab('network')
       navigate(`/jobs/${job_id}`)
+    } catch (e) {
+      setRerunError(e instanceof Error ? e.message : String(e))
     } finally {
       setRerunBusy(false)
     }
@@ -118,6 +122,11 @@ export default function JobPage() {
         >
           {rerunBusy ? 'Submitting…' : 'Re-run with new parameters'}
         </button>
+        {rerunError && (
+          <p className="text-xs" style={{ color: 'var(--critical)' }}>
+            {rerunError}
+          </p>
+        )}
         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
           Edge-weight filtering is instant on the Network tab — only time window and
           participation changes need a re-run (cached detection makes them fast).

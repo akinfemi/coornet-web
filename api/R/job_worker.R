@@ -101,16 +101,21 @@ worker_run_job <- function(job_dir, dataset_dir, params, helper_files) {
       params$time_window, params$min_participation, tolower(params$remove_loops)
     )
     detect_cache <- file.path(dataset_dir, detect_key)
-    if (file.exists(detect_cache)) {
-      result <- readRDS(detect_cache)
-    } else {
+    # tryCatch: a worker killed mid-write (timeout) must not poison the cache;
+    # tmp+rename keeps concurrent jobs on the same dataset from interleaving.
+    result <- if (file.exists(detect_cache)) {
+      tryCatch(readRDS(detect_cache), error = function(e) NULL)
+    } else NULL
+    if (is.null(result)) {
       result <- detect_groups(
         dt,
         time_window = params$time_window,
         min_participation = params$min_participation,
         remove_loops = params$remove_loops
       )
-      saveRDS(result, detect_cache)
+      tmp <- sprintf("%s.tmp%s", detect_cache, Sys.getpid())
+      saveRDS(result, tmp)
+      file.rename(tmp, detect_cache)
     }
     if (nrow(result) == 0) {
       stop("no coordinated pairs found with these parameters; try a larger time_window or lower min_participation")

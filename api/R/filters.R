@@ -29,14 +29,26 @@ filter_body_size <- function(req, res) {
 }
 
 # Per-IP hourly quota on the expensive POST endpoints (uploads, jobs, imports).
-# Caddy adds edge rate limiting in production; this is the in-app backstop.
+# This in-app limiter is the enforcement point (stock Caddy has no rate-limit
+# module). Keyed on the RIGHT-most X-Forwarded-For hop: the reverse proxy
+# appends the real client there, while left-hand entries are client-spoofable.
 .rate <- new.env(parent = emptyenv())
 filter_rate_limit <- function(req, res) {
   if (!identical(req$REQUEST_METHOD, "POST")) return(plumber::forward())
   limit <- cfg_num("RATE_LIMIT_POSTS_PER_HOUR", 60)
-  ip <- req$HTTP_X_FORWARDED_FOR %||% req$REMOTE_ADDR %||% "unknown"
-  ip <- trimws(strsplit(ip, ",")[[1]][1])
+  xff <- req$HTTP_X_FORWARDED_FOR
+  ip <- if (!is.null(xff) && nzchar(xff)) {
+    utils::tail(trimws(strsplit(xff, ",")[[1]]), 1)
+  } else {
+    req$REMOTE_ADDR %||% "unknown"
+  }
   now <- as.numeric(Sys.time())
+  # Evict fully-stale keys so spoofed headers can't grow memory unboundedly.
+  if (length(ls(.rate)) > 5000) {
+    for (k in ls(.rate)) {
+      if (all(get(k, envir = .rate) <= now - 3600)) rm(list = k, envir = .rate)
+    }
+  }
   hits <- mget(ip, envir = .rate, ifnotfound = list(numeric(0)))[[1]]
   hits <- hits[hits > now - 3600]
   if (length(hits) >= limit) {

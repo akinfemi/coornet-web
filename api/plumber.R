@@ -20,14 +20,21 @@ source(file.path(API_ROOT, "R", "routes_jobs.R"))
 source(file.path(API_ROOT, "R", "routes_twitter.R"))
 
 init_storage()
+jobs_recover()
 
 build_api <- function() {
   # Handlers using this serializer set their own Content-Type/Disposition via
-  # res$setHeader and return raw bytes.
+  # res$setHeader and return raw bytes. Non-raw values (error handler output)
+  # still get a JSON body instead of an empty response.
   raw_serializer <- function() {
     function(val, req, res, errorHandler) {
       tryCatch({
-        if (is.raw(val)) res$body <- val
+        if (is.raw(val)) {
+          res$body <- val
+        } else if (!is.null(val)) {
+          res$setHeader("Content-Type", "application/json")
+          res$body <- jsonlite::toJSON(val, auto_unbox = TRUE, null = "null")
+        }
         res$toResponse()
       }, error = function(e) errorHandler(req, res, e))
     }

@@ -27,7 +27,9 @@ route_get_job <- function(req, res, id) {
   record <- read_json_file(file.path(job_dir(id), "params.json"))
   st$type <- record$type
   st$dataset_id <- record$dataset_id
-  st$params <- record$params
+  # An empty R list serializes as [] (array), which clients expecting an
+  # object reject — omit params entirely when there are none (import jobs).
+  if (length(record$params) > 0) st$params <- record$params
   st$derived_from <- record$derived_from
   st
 }
@@ -50,8 +52,12 @@ route_get_network <- function(req, res, id) {
   if (!file.exists(path)) stop(api_error(404, "artifact not available (job not finished?)"))
   dt <- data.table::fread(path)
   q <- req$argsQuery
-  page <- max(1, suppressWarnings(as.integer(q$page %||% 1)))
-  per_page <- min(500, max(1, suppressWarnings(as.integer(q$per_page %||% 50))))
+  int_or <- function(x, default) {
+    v <- suppressWarnings(as.integer(x %||% default))
+    if (is.na(v)) default else v
+  }
+  page <- max(1, int_or(q$page, 1L))
+  per_page <- min(500, max(1, int_or(q$per_page, 50L)))
   if (!is.null(q$sort)) {
     desc <- startsWith(q$sort, "-")
     col <- sub("^-", "", q$sort)

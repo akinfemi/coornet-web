@@ -126,6 +126,21 @@ jobs_tick <- function() {
   }
 }
 
+# On boot, fail any job left non-terminal by a previous process — its worker
+# is gone and nothing will ever update it (clients would poll forever).
+jobs_recover <- function() {
+  for (d in list.dirs(jobs_root(), recursive = FALSE)) {
+    st <- read_json_file(file.path(d, "status.json"))
+    if (!is.null(st) && !st$status %in% c("succeeded", "failed")) {
+      write_json_file(
+        list(status = "failed", stage = "interrupted",
+             error = "the server restarted while this job was in flight; submit it again"),
+        file.path(d, "status.json")
+      )
+    }
+  }
+}
+
 .last_sweep <- new.env(parent = emptyenv())
 jobs_schedule_tick <- function() {
   later::later(function() {

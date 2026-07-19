@@ -40,7 +40,18 @@ export const JobStatus = z.object({
   error: z.string().nullish(),
   dataset_id: z.string().nullish(),
   derived_from: z.string().nullish(),
-  params: z.record(z.string(), z.unknown()).nullish(),
+  // The R backend serializes an empty params list as [] — accept both shapes.
+  params: z
+    .union([z.record(z.string(), z.unknown()), z.array(z.unknown())])
+    .nullish()
+    .transform((p) => (Array.isArray(p) ? undefined : (p ?? undefined))),
+  result: z
+    .object({
+      dataset_id: z.string().nullish(),
+      n_rows: z.number().nullish(),
+      n_tweets_fetched: z.number().nullish(),
+    })
+    .nullish(),
 })
 export type JobStatus = z.infer<typeof JobStatus>
 

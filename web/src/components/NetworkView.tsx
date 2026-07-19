@@ -34,6 +34,10 @@ export default function NetworkView({ network }: Props) {
 
   const { graph, colors, communitySizes } = useMemo(() => buildGraph(network), [network])
 
+  // Fast-net graphs carry weight_full/weight_fast instead of weight — the
+  // backend names the canonical column in meta.weight_col.
+  const weightCol = network.meta.weight_col ?? 'weight'
+
   const threshold =
     view.percentile > 0 ? network.meta.weight_quantiles.q[view.percentile] : null
 
@@ -44,8 +48,8 @@ export default function NetworkView({ network }: Props) {
 
   const visibleEdges = useMemo(() => {
     if (threshold === null) return network.meta.n_edges
-    return network.edges.filter((e) => e.weight > threshold).length
-  }, [network, threshold])
+    return network.edges.filter((e) => (e[weightCol] as number) > threshold).length
+  }, [network, threshold, weightCol])
 
   return (
     <div className="grid h-full grid-cols-[1fr_18rem]">
@@ -137,13 +141,15 @@ export default function NetworkView({ network }: Props) {
 
 function buildGraph(network: NetworkPayload) {
   const graph = new Graph({ type: 'undirected', multi: false })
+  const weightCol = network.meta.weight_col ?? 'weight'
   const communitySizes = new Map<number, number>()
   for (const n of network.nodes) {
     communitySizes.set(n.community, (communitySizes.get(n.community) ?? 0) + 1)
   }
   const colors = communityColors(communitySizes)
 
-  const maxStrength = Math.max(...network.nodes.map((n) => n.strength), 1)
+  // reduce, not Math.max(...spread): spread throws past ~65k arguments
+  const maxStrength = network.nodes.reduce((m, n) => Math.max(m, n.strength), 1)
   network.nodes.forEach((n, i) => {
     const angle = (2 * Math.PI * i) / network.nodes.length
     graph.addNode(n.id, {
@@ -156,10 +162,12 @@ function buildGraph(network: NetworkPayload) {
     })
   })
   for (const e of network.edges) {
+    const w = (e[weightCol] as number) ?? 1
     if (!graph.hasEdge(e.source, e.target)) {
       graph.addEdge(e.source, e.target, {
-        weight: e.weight,
-        size: Math.min(1 + Math.log2(e.weight), 6),
+        // normalized: reducers and sizing always read `weight`
+        weight: w,
+        size: Math.min(1 + Math.log2(Math.max(w, 1)), 6),
         threshold_pass: (e.weight_threshold ?? 1) === 1,
       })
     }

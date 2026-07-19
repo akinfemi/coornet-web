@@ -37,9 +37,16 @@ validate_mapped <- function(dt) {
         ))
       ))
     }
-    data.table::set(dt, j = "timestamp_share", value = as.integer(parsed))
+    data.table::set(dt, j = "timestamp_share", value = round(parsed))
   } else {
-    data.table::set(dt, j = "timestamp_share", value = as.integer(ts))
+    ts_num <- as.numeric(ts)
+    # Millisecond epochs (common in platform exports) would otherwise all
+    # overflow/land in the year 56000; numeric (not integer) storage also
+    # keeps post-2038 timestamps working.
+    if (isTRUE(stats::median(ts_num, na.rm = TRUE) > 1e11)) {
+      ts_num <- ts_num / 1000
+    }
+    data.table::set(dt, j = "timestamp_share", value = round(ts_num))
   }
 
   n_na <- sum(!stats::complete.cases(dt[, REQUIRED_SCHEMA, with = FALSE]))
@@ -99,8 +106,11 @@ validate_job_params <- function(params) {
     if (is.null(p$fast_net$time_window) || !ok_num(p$fast_net$time_window, 1, p$time_window)) {
       stop(api_error(400, "fast_net.time_window must be a number <= time_window"))
     }
-    if (p$subgraph %in% 2:3 == FALSE && p$subgraph != 0 && p$subgraph != 1) {
-      # subgraph 2/3 only meaningful with fast_net; the reverse is fine
+    # generate_coordinated_network()'s subgraph=1 path cannot handle the
+    # fast-net edge attributes (upstream regex misses *_full/*_fast) — it
+    # always errors, so reject it up front.
+    if (p$subgraph == 1) {
+      stop(api_error(400, "subgraph 1 is not supported with fast_net; use subgraph 2 (fast edges) or 3 (fast vertices + neighbors)"))
     }
   } else if (p$subgraph %in% 2:3) {
     stop(api_error(400, "subgraph modes 2 and 3 require fast_net"))

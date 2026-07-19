@@ -85,15 +85,12 @@ route_map_dataset <- function(req, res, id) {
     stop(api_error(400, "each schema field must map to a distinct column"))
   }
 
-  # prep_data for the id columns; timestamp handled by validate_mapped so we
-  # can return row-level diagnostics instead of prep_data's stop().
-  dt <- CooRTweet::prep_data(
-    dt,
-    object_id = mapping$object_id,
-    account_id = mapping$account_id,
-    content_id = mapping$content_id
-  )
-  data.table::setnames(dt, mapping$timestamp_share, "timestamp_share")
+  # Select the mapped source columns first, then rename — a plain
+  # prep_data()-style rename would create duplicate column names when the CSV
+  # already contains a schema-named column mapped to a different field, and
+  # the analysis would silently run on the wrong column.
+  dt <- dt[, unlist(mapping[REQUIRED_SCHEMA]), with = FALSE]
+  data.table::setnames(dt, REQUIRED_SCHEMA)
 
   v <- validate_mapped(dt)
   if (!isTRUE(v$ok)) {

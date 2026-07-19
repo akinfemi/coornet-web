@@ -6,6 +6,8 @@
 	encode gzip
 
 	# API reverse proxy — body cap slightly above the app's MAX_UPLOAD_MB.
+	# Rate limiting is enforced in the API itself (stock Caddy has no
+	# rate-limit module; add github.com/mholt/caddy-ratelimit for edge limits).
 	handle /api/* {
 		request_body {
 			max_size 110MB

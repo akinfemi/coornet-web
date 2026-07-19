@@ -115,10 +115,12 @@ export default function WizardPage() {
         throw new Error(st.error ?? 'import failed')
       }
       setImportedDatasetId(dataset_id)
+      // The import replaces any earlier upload as the active dataset.
+      setUpload(null)
       setReport({
         dataset_id,
         report: {
-          n_rows: (st as unknown as { result?: { n_rows?: number } }).result?.n_rows ?? 0,
+          n_rows: st.result?.n_rows ?? 0,
           n_rows_dropped_na: 0,
           n_accounts: 0,
           n_objects: 0,
