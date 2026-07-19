@@ -1,0 +1,32 @@
+# fly launch --no-deploy --copy-config -c fly.api.toml   (then: fly deploy -c fly.api.toml)
+app = "coortweet-api"
+primary_region = "ams"
+
+[build]
+  dockerfile = "docker/api.Dockerfile"
+
+[env]
+  DATA_DIR = "/data"
+  MAX_UPLOAD_MB = "100"
+  MAX_ROWS = "2000000"
+  MAX_GROUP_SIZE = "20000"
+  MAX_CONCURRENT_JOBS = "2"
+  JOB_TIMEOUT_S = "900"
+  RETENTION_HOURS = "72"
+  RATE_LIMIT_POSTS_PER_HOUR = "60"
+  TWITTER_MAX_POSTS = "50000"
+
+[mounts]
+  source = "coortweet_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb"

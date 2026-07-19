@@ -1,0 +1,19 @@
+# fly deploy -c fly.web.toml
+# Set API_UPSTREAM to the api app's internal address, e.g.:
+#   fly secrets set -c fly.web.toml API_UPSTREAM=coortweet-api.internal:8000
+app = "coortweet-web"
+primary_region = "ams"
+
+[build]
+  dockerfile = "docker/web.Dockerfile"
+
+[http_service]
+  internal_port = 80
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

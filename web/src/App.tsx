@@ -19,6 +19,13 @@ export default function App() {
             New analysis
           </NavLink>
           <NavLink
+            to="/walkthrough"
+            className={({ isActive }) => (isActive ? 'font-semibold' : '')}
+            style={({ isActive }) => (isActive ? { color: 'var(--text-primary)' } : {})}
+          >
+            Walkthrough
+          </NavLink>
+          <NavLink
             to="/about"
             className={({ isActive }) => (isActive ? 'font-semibold' : '')}
             style={({ isActive }) => (isActive ? { color: 'var(--text-primary)' } : {})}

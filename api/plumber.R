@@ -39,6 +39,7 @@ build_api <- function() {
     pr_filter("log", filter_log) |>
     pr_filter("cors", filter_cors) |>
     pr_filter("body_size", filter_body_size) |>
+    pr_filter("rate_limit", filter_rate_limit) |>
     pr_get("/api/v1/healthz", function() list(ok = TRUE, time = format(Sys.time(), tz = "UTC"))) |>
     pr_post("/api/v1/datasets", route_upload_dataset,
             parsers = c("multi", "octet")) |>

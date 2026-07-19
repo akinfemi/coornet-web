@@ -28,6 +28,27 @@ filter_body_size <- function(req, res) {
   plumber::forward()
 }
 
+# Per-IP hourly quota on the expensive POST endpoints (uploads, jobs, imports).
+# Caddy adds edge rate limiting in production; this is the in-app backstop.
+.rate <- new.env(parent = emptyenv())
+filter_rate_limit <- function(req, res) {
+  if (!identical(req$REQUEST_METHOD, "POST")) return(plumber::forward())
+  limit <- cfg_num("RATE_LIMIT_POSTS_PER_HOUR", 60)
+  ip <- req$HTTP_X_FORWARDED_FOR %||% req$REMOTE_ADDR %||% "unknown"
+  ip <- trimws(strsplit(ip, ",")[[1]][1])
+  now <- as.numeric(Sys.time())
+  hits <- mget(ip, envir = .rate, ifnotfound = list(numeric(0)))[[1]]
+  hits <- hits[hits > now - 3600]
+  if (length(hits) >= limit) {
+    res$status <- 429L
+    return(list(error = sprintf(
+      "rate limit exceeded (%d requests/hour); try again later", limit
+    )))
+  }
+  assign(ip, c(hits, now), envir = .rate)
+  plumber::forward()
+}
+
 # Redact anything that looks like a credential before logging /twitter bodies.
 filter_log <- function(req, res) {
   path <- req$PATH_INFO %||% ""

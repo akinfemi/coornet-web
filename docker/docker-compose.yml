@@ -1,0 +1,32 @@
+# Local production-shaped stack:  docker compose -f docker/docker-compose.yml up
+services:
+  api:
+    image: coortweet-api
+    build:
+      context: ..
+      dockerfile: docker/api.Dockerfile
+    environment:
+      DATA_DIR: /data
+      MAX_UPLOAD_MB: "100"
+      MAX_ROWS: "2000000"
+      MAX_GROUP_SIZE: "20000"
+      MAX_CONCURRENT_JOBS: "2"
+      JOB_TIMEOUT_S: "900"
+      RETENTION_HOURS: "72"
+      RATE_LIMIT_POSTS_PER_HOUR: "60"
+      TWITTER_MAX_POSTS: "50000"
+    volumes:
+      - coortweet_data:/data
+
+  web:
+    image: coortweet-web
+    build:
+      context: ..
+      dockerfile: docker/web.Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+volumes:
+  coortweet_data:

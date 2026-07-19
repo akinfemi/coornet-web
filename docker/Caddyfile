@@ -1,0 +1,22 @@
+{
+	admin off
+}
+
+:80 {
+	encode gzip
+
+	# API reverse proxy — body cap slightly above the app's MAX_UPLOAD_MB.
+	handle /api/* {
+		request_body {
+			max_size 110MB
+		}
+		reverse_proxy {$API_UPSTREAM:api:8000}
+	}
+
+	# SPA static hosting with client-side routing fallback.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
