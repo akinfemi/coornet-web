@@ -2,8 +2,7 @@
 
 A public web app for detecting **coordinated behavior on social media**, built on the
 [CooRTweet](https://cran.r-project.org/package=CooRTweet) R package (Righetti & Balluff,
-2025) — the published implementation runs unmodified behind a REST API; nothing is
-reimplemented.
+2025).
 
 ![CooRTweet Web — walkthrough showing the fast coordination subgraph of the 2021 German election dataset](shots/graph1.png)
 
