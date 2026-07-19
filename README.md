@@ -5,6 +5,8 @@ A public web app for detecting **coordinated behavior on social media**, built o
 2025) — the published implementation runs unmodified behind a REST API; nothing is
 reimplemented.
 
+![CooRTweet Web — walkthrough showing the fast coordination subgraph of the 2021 German election dataset](shots/graph1.png)
+
 - **R Plumber API** (`api/`) — upload CSV → map to the 4-column schema
   (`object_id`, `account_id`, `content_id`, `timestamp_share`) → detection jobs in
   isolated `callr` worker processes → network JSON / GraphML / GEXF / CSV.
