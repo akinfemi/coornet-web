@@ -151,3 +151,34 @@ export async function getStats(
 export function exportUrl(jobId: string, format: string): string {
   return `${BASE}/jobs/${jobId}/export?format=${format}`
 }
+
+export interface TwitterImportSpec {
+  bearer_token: string
+  mode: 'search_recent' | 'search_all' | 'user_tweets'
+  query?: string
+  user_id?: string
+  intent: 'retweets' | 'hashtags' | 'urls' | 'urls_domains'
+  max_results: number
+  start_time?: string
+  end_time?: string
+}
+
+export async function twitterImport(
+  spec: TwitterImportSpec,
+): Promise<{ job_id: string; dataset_id: string }> {
+  const res = await fetch(`${BASE}/twitter/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(spec),
+  })
+  return (await jsonOrThrow(res)) as { job_id: string; dataset_id: string }
+}
+
+/** Poll an import job until it reaches a terminal state. */
+export async function waitForJob(jobId: string, intervalMs = 2000): Promise<JobStatus> {
+  for (;;) {
+    const st = await getJob(jobId)
+    if (st.status === 'succeeded' || st.status === 'failed') return st
+    await new Promise((r) => setTimeout(r, intervalMs))
+  }
+}

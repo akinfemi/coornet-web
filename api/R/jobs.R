@@ -8,6 +8,19 @@
 jobs_max_concurrent <- function() cfg_num("MAX_CONCURRENT_JOBS", 2)
 jobs_timeout_s <- function() cfg_num("JOB_TIMEOUT_S", 900)
 
+# Recursively blank credential-shaped fields before anything hits disk.
+redact_secrets <- function(x) {
+  if (!is.list(x)) return(x)
+  for (nm in names(x)) {
+    if (nm %in% c("bearer_token", "api_key", "token", "secret", "password")) {
+      x[[nm]] <- "***"
+    } else if (is.list(x[[nm]])) {
+      x[[nm]] <- redact_secrets(x[[nm]])
+    }
+  }
+  x
+}
+
 job_create <- function(dataset_id, params, type = "analysis", extra = list()) {
   id <- new_id()
   dir.create(job_dir(id), recursive = TRUE)
@@ -17,7 +30,7 @@ job_create <- function(dataset_id, params, type = "analysis", extra = list()) {
     dataset_id = dataset_id,
     params = params,
     created_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
-  ), extra)
+  ), redact_secrets(extra))
   write_json_file(record, file.path(job_dir(id), "params.json"))
   write_json_file(
     list(status = "queued", stage = "queued"),

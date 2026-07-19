@@ -3,6 +3,65 @@
 # (passed by path) because closures don't carry sibling functions across
 # process boundaries.
 
+# Import job: fetch from an external source (Twitter/X), map to the schema,
+# and materialize a normal dataset dir. The bearer token arrives only via the
+# in-memory `spec` argument.
+worker_run_import <- function(job_dir, spec, helper_files) {
+  for (f in helper_files) source(f, local = FALSE)
+  suppressPackageStartupMessages(library(data.table))
+
+  status_path <- file.path(job_dir, "status.json")
+  set_status <- function(st) {
+    tmp <- paste0(status_path, ".tmp")
+    jsonlite::write_json(st, tmp, auto_unbox = TRUE, null = "null")
+    file.rename(tmp, status_path)
+  }
+
+  tryCatch({
+    set_status(list(status = "running", stage = "fetching"))
+    pages <- fetch_twitter_pages(
+      spec,
+      max_posts = as.numeric(Sys.getenv("TWITTER_MAX_POSTS", "50000"))
+    )
+    tweets <- flatten_twitter_pages(pages)
+    if (nrow(tweets) == 0) stop("the query returned no tweets")
+
+    set_status(list(status = "running", stage = "mapping"))
+    mapped <- map_twitter_intent(tweets, spec$intent)
+    if (nrow(mapped) == 0) {
+      stop(sprintf("no rows for intent '%s' (e.g. no retweets/URLs in the result set)", spec$intent))
+    }
+
+    dir.create(spec$dataset_dir, recursive = TRUE, showWarnings = FALSE)
+    saveRDS(mapped, file.path(spec$dataset_dir, "mapped.rds"))
+    meta <- list(
+      dataset_id = spec$dataset_id,
+      source = "twitter",
+      mode = spec$mode,
+      intent = spec$intent,
+      n_rows = nrow(mapped),
+      n_tweets_fetched = nrow(tweets),
+      columns = names(mapped),
+      created_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+      mapped = TRUE
+    )
+    jsonlite::write_json(
+      meta, file.path(spec$dataset_dir, "meta.json"),
+      auto_unbox = TRUE, null = "null"
+    )
+
+    set_status(list(
+      status = "succeeded", stage = "done",
+      result = list(dataset_id = spec$dataset_id, n_rows = nrow(mapped),
+                    n_tweets_fetched = nrow(tweets))
+    ))
+    invisible(TRUE)
+  }, error = function(e) {
+    set_status(list(status = "failed", stage = "failed", error = conditionMessage(e)))
+    stop(e)
+  })
+}
+
 worker_run_job <- function(job_dir, dataset_dir, params, helper_files) {
   for (f in helper_files) source(f, local = FALSE)
   suppressPackageStartupMessages({

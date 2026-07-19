@@ -14,8 +14,10 @@ source(file.path(API_ROOT, "R", "storage.R"))
 source(file.path(API_ROOT, "R", "validate.R"))
 source(file.path(API_ROOT, "R", "jobs.R"))
 source(file.path(API_ROOT, "R", "filters.R"))
+source(file.path(API_ROOT, "R", "sources", "source_twitter.R"))
 source(file.path(API_ROOT, "R", "routes_datasets.R"))
 source(file.path(API_ROOT, "R", "routes_jobs.R"))
+source(file.path(API_ROOT, "R", "routes_twitter.R"))
 
 init_storage()
 
@@ -43,6 +45,7 @@ build_api <- function() {
     pr_post("/api/v1/datasets/<id>/mapping", route_map_dataset) |>
     pr_get("/api/v1/datasets/<id>", route_get_dataset) |>
     pr_post("/api/v1/jobs", route_create_job) |>
+    pr_post("/api/v1/twitter/import", route_twitter_import) |>
     pr_get("/api/v1/jobs/<id>", route_get_job) |>
     pr_get("/api/v1/jobs/<id>/network", route_get_network,
            serializer = raw_serializer()) |>

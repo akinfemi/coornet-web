@@ -4,10 +4,14 @@ import {
   uploadDataset,
   mapDataset,
   createJob,
+  twitterImport,
+  waitForJob,
   type UploadResponse,
   type MappingReport,
   type JobParams,
+  type TwitterImportSpec,
 } from '../lib/api'
+import TwitterImportForm from '../components/TwitterImportForm'
 
 const SCHEMA_FIELDS = ['object_id', 'account_id', 'content_id', 'timestamp_share'] as const
 type SchemaField = (typeof SCHEMA_FIELDS)[number]
@@ -82,14 +86,51 @@ export default function WizardPage() {
   }
 
   const onRun = async () => {
-    if (!upload) return
+    const datasetId = upload?.dataset_id ?? importedDatasetId
+    if (!datasetId) return
     setBusy(true)
     setError(null)
     try {
-      const { job_id } = await createJob(upload.dataset_id, params)
+      const { job_id } = await createJob(datasetId, params)
       navigate(`/jobs/${job_id}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+      setBusy(false)
+    }
+  }
+
+  const [source, setSource] = useState<'upload' | 'twitter'>('upload')
+  const [importedDatasetId, setImportedDatasetId] = useState<string | null>(null)
+  const [importProgress, setImportProgress] = useState<string | null>(null)
+
+  const onTwitterImport = async (spec: TwitterImportSpec) => {
+    setBusy(true)
+    setError(null)
+    setImportProgress('Contacting the X API…')
+    try {
+      const { job_id, dataset_id } = await twitterImport(spec)
+      setImportProgress('Fetching tweets (this can take a while for large queries)…')
+      const st = await waitForJob(job_id)
+      if (st.status === 'failed') {
+        throw new Error(st.error ?? 'import failed')
+      }
+      setImportedDatasetId(dataset_id)
+      setReport({
+        dataset_id,
+        report: {
+          n_rows: (st as unknown as { result?: { n_rows?: number } }).result?.n_rows ?? 0,
+          n_rows_dropped_na: 0,
+          n_accounts: 0,
+          n_objects: 0,
+          timestamp_range: ['', ''],
+          oversize_objects: null,
+        },
+      })
+      setStep(2)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setImportProgress(null)
       setBusy(false)
     }
   }
@@ -114,23 +155,57 @@ export default function WizardPage() {
 
       {step === 0 && (
         <Card>
-          <h2 className="mb-2 font-medium">Upload a CSV</h2>
-          <p className="mb-4 text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Any dataset works if each row is one “share” event: something shared, by
-            someone, at some time. Gzip-compressed CSVs are accepted. Max 100&nbsp;MB /
-            2M rows.
-          </p>
-          <input
-            type="file"
-            accept=".csv,.gz,text/csv"
-            disabled={busy}
-            data-testid="file-input"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) void onFile(f)
-            }}
-          />
-          {busy && <Busy label="Uploading and parsing…" />}
+          <div className="mb-5 flex gap-2">
+            {(
+              [
+                ['upload', 'Upload CSV'],
+                ['twitter', 'Import from X/Twitter'],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setSource(key)}
+                className="rounded-md px-3 py-1.5 text-sm font-medium"
+                style={
+                  source === key
+                    ? { background: 'var(--accent)', color: '#fff' }
+                    : { border: '1px solid var(--baseline)', color: 'var(--text-secondary)' }
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {source === 'upload' && (
+            <>
+              <h2 className="mb-2 font-medium">Upload a CSV</h2>
+              <p className="mb-4 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                Any dataset works if each row is one “share” event: something shared, by
+                someone, at some time. Gzip-compressed CSVs are accepted. Max 100&nbsp;MB /
+                2M rows.
+              </p>
+              <input
+                type="file"
+                accept=".csv,.gz,text/csv"
+                disabled={busy}
+                data-testid="file-input"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) void onFile(f)
+                }}
+              />
+              {busy && <Busy label="Uploading and parsing…" />}
+            </>
+          )}
+
+          {source === 'twitter' && (
+            <TwitterImportForm
+              busy={busy}
+              progress={importProgress}
+              onSubmit={(spec) => void onTwitterImport(spec)}
+            />
+          )}
         </Card>
       )}
 
@@ -187,10 +262,15 @@ export default function WizardPage() {
             data-testid="validation-report"
           >
             <span style={{ color: 'var(--good)' }}>✓ Valid.</span>{' '}
-            {report.report.n_rows.toLocaleString()} rows ·{' '}
-            {report.report.n_accounts.toLocaleString()} accounts ·{' '}
-            {report.report.n_objects.toLocaleString()} shared objects ·{' '}
-            {report.report.timestamp_range[0]} → {report.report.timestamp_range[1]}
+            {report.report.n_rows.toLocaleString()} rows
+            {report.report.n_accounts > 0 && (
+              <>
+                {' '}
+                · {report.report.n_accounts.toLocaleString()} accounts ·{' '}
+                {report.report.n_objects.toLocaleString()} shared objects ·{' '}
+                {report.report.timestamp_range[0]} → {report.report.timestamp_range[1]}
+              </>
+            )}
             {report.report.n_rows_dropped_na > 0 &&
               ` · ${report.report.n_rows_dropped_na} rows dropped (missing values)`}
           </div>
